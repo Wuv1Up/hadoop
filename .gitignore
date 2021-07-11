@@ -12,7 +12,9 @@
 .classpath
 .project
 .settings
-target
+**/target/*
+!**/target/generated-sources
+!**/target/generated-test-sources
 build
 hadoop-common-project/hadoop-kms/downloads/
 hadoop-hdfs-project/hadoop-hdfs/downloads
