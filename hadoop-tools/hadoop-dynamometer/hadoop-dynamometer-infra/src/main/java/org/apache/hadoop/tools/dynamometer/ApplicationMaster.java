@@ -84,6 +84,11 @@ import org.slf4j.LoggerFactory;
 
 
 /**
+ * <p>ApplicationMaster 使用 {@link org.apache.hadoop.yarn.client.api.async.impl.AMRMClientAsyncImpl}
+ * 与 ResourceManager 通信, AM 会注册自己,申请资源,取消注册自己</p>
+ *
+ * <p>ApplicationMaster 使用 {@link NMClientAsyncImpl} 与 NodeManager 通信, 主要是管理 Container</p>
+ *
  * The ApplicationMaster for Dynamometer. This will launch DataNodes in YARN
  * containers. If the RPC address of a NameNode is specified, it will configure
  * the DataNodes to talk to that NameNode. Else, a NameNode will be launched as

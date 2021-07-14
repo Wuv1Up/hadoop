@@ -58,6 +58,17 @@ import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTest
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * ApplicationMaster 与 ResourceManager 通信的封装类.<br>
+ *
+ * 主要的通信有:
+ * <ol>
+ *   <li>ApplicationMaster 通过 <code>registerApplicationMaster</code> 向 ResourceManager 进行注册</li>
+ *   <li>ApplicationMaster 通过 <code>addContainerRequest</code> 向 ResourceManager 申请资源</li>
+ *   <li>ApplicationMaster 通过 <code>unregisterApplicationMaster</code> 向 ResourceManager 取消注册,表示完成</li>
+ * </ol>
+ *
+ */
 @Private
 @Unstable
 public class AMRMClientAsyncImpl<T extends ContainerRequest> 
