@@ -597,6 +597,7 @@ public class ProtobufRpcEngine2 implements RpcEngine {
           server.rpcDetailedMetrics.init(protocolImpl.protocolClass);
           CURRENT_CALL_INFO.set(new CallInfo(server, methodName));
           currentCall.setDetailedMetricsName(methodName);
+          // wuv1:rpc:handler => ProtobufRpcEngine 处理 request 逻辑
           result = service.callBlockingMethod(methodDescriptor, null, param);
           // Check if this needs to be a deferred response,
           // by checking the ThreadLocal callback being set

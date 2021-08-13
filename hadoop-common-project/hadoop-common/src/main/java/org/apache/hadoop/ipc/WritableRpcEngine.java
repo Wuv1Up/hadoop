@@ -540,6 +540,7 @@ public class WritableRpcEngine implements RpcEngine {
         Exception exception = null;
         Call currentCall = Server.getCurCall().get();
         try {
+          // wuv1:rpc:handler => WritableRpcEngine 中处理 request 的逻辑
           Method method =
               protocolImpl.protocolClass.getMethod(call.getMethodName(),
               call.getParameterClasses());

@@ -1032,6 +1032,7 @@ public abstract class Server {
       ResponseParams responseParams = new ResponseParams();
 
       try {
+        // wuv1:rpc:handler => handler 线程根据 rpcKind 获取 RpcInvoker 之后调用方法
         value = call(
             rpcKind, connection.protocolName, rpcRequest, timestampNanos);
       } catch (Throwable e) {
@@ -1049,6 +1050,7 @@ public abstract class Server {
         startNanos = Time.monotonicNowNanos();
 
         setResponseFields(value, responseParams);
+        // wuv1:rpc:handler => 处理完成之后, 发送 response.
         sendResponse();
 
         deltaNanos = Time.monotonicNowNanos() - startNanos;
@@ -1197,11 +1199,13 @@ public abstract class Server {
     }
   }
 
+  // wuv1:rpc:listener => Listener 线程启动之后,监听网络 ACCEPT 事件.
   /** Listens on the socket. Creates jobs for the handler threads*/
   private class Listener extends Thread {
     
     private ServerSocketChannel acceptChannel = null; //the accept channel
     private Selector selector = null; //the selector that we use for the server
+    // wuv1:rpc:listener => listener 中有 reader, 默认为 1 个.
     private Reader[] readers = null;
     private int currentReader = 0;
     private InetSocketAddress address; //the address we bind at
@@ -1237,6 +1241,7 @@ public abstract class Server {
         reader.start();
       }
 
+      // wuv1:rpc:listener => listener 中的 select 注册 accept 事件.
       // Register accepts on the server socket with the selector.
       acceptChannel.register(selector, SelectionKey.OP_ACCEPT);
       this.setName("IPC Server listener on " + port);
@@ -1282,6 +1287,8 @@ public abstract class Server {
             // unbridled acceptance of connections that starves the select
             int size = pendingConnections.size();
             for (int i=size; i>0; i--) {
+              // wuv1:rpc:reader => listener 将 connection 放入 pendingConnections 后,
+              //  reader 会取出,并且注册 read 事件, 未来有数据写入, readSelector 会监控到.
               Connection conn = pendingConnections.take();
               conn.channel.register(readSelector, SelectionKey.OP_READ, conn);
             }
@@ -1293,6 +1300,7 @@ public abstract class Server {
               iter.remove();
               try {
                 if (key.isReadable()) {
+                  // wuv1:rpc:reader => reader 监控到某个 channel 有 read 事件, 把 SelectKey 传入处理
                   doRead(key);
                 }
               } catch (CancelledKeyException cke) {
@@ -1355,6 +1363,7 @@ public abstract class Server {
             try {
               if (key.isValid()) {
                 if (key.isAcceptable())
+                  // wuv1:rpc:listener => listener 对网络上进来的 accept 事件处理
                   doAccept(key);
               }
             } catch (IOException e) {
@@ -1412,7 +1421,9 @@ public abstract class Server {
         channel.configureBlocking(false);
         channel.socket().setTcpNoDelay(tcpNoDelay);
         channel.socket().setKeepAlive(true);
-        
+
+        // wuv1:rpc:listener => listener 中会将事件为 accept 的 connection 与 reader 进行绑定.
+        //  将 connection 添加到 reader 中之后, reader 会进行后续的处理.
         Reader reader = getReader();
         Connection c = connectionManager.register(channel,
             this.listenPort, this.isOnAuxiliaryPort);
@@ -1438,6 +1449,7 @@ public abstract class Server {
       c.setLastContact(Time.now());
       
       try {
+        // wuv1:rpc:reader => reader 监控到 channel 有数据写入会调用该方法.
         count = c.readAndProcess();
       } catch (InterruptedException ieo) {
         LOG.info(Thread.currentThread().getName() + ": readAndProcess caught InterruptedException", ieo);
@@ -2325,6 +2337,10 @@ public abstract class Server {
           ByteBuffer requestData = data;
           data = null; // null out in case processOneRpc throws.
           boolean isHeaderRead = connectionContextRead;
+          // wuv1:rpc:reader => reader 将接收到的数据进行校验操作之后,开始处理一次 rpc 请求.
+          //  校验要求需满足下面两点:
+          //    1. rpc 请求符合格式
+          //    2. exactly 一次 RPC 请求
           processOneRpc(requestData);
           // the last rpc-request we processed could have simply been the
           // connectionContext; if so continue to read the first RPC.
@@ -2582,6 +2598,7 @@ public abstract class Server {
               RpcErrorCodeProto.FATAL_INVALID_RPC_HEADER,
               "Connection context not established");
         } else {
+          // wuv1:rpc:reader => 验证完 rpc header, 准备处理请求
           processRpcRequest(header, buffer);
         }
       } catch (RpcServerException rse) {
@@ -2697,6 +2714,7 @@ public abstract class Server {
                 .build();
       }
 
+      // wuv1:rpc:reader => reader 线程将 RpcRequest 封装进 RpcCall
       RpcCall call = new RpcCall(this, header.getCallId(),
           header.getRetryCount(), rpcRequest,
           ProtoUtil.convert(header.getRpcKind()),
@@ -2731,6 +2749,7 @@ public abstract class Server {
       }
 
       try {
+        // wuv1:rpc:reader => 将封装的 RpcCall 放入 内部的 queue 中.
         internalQueueCall(call);
       } catch (RpcServerException rse) {
         throw rse;
@@ -2834,6 +2853,7 @@ public abstract class Server {
     // must invoke call.sendResponse to allow lifecycle management of
     // external, postponed, deferred calls, etc.
     private void sendResponse(RpcCall call) throws IOException {
+      // wuv1:rpc:handler => 将 call 的 response 传递给 responder 处理
       responder.doRespond(call);
     }
 
@@ -2929,6 +2949,7 @@ public abstract class Server {
         boolean connDropped = true;
 
         try {
+          // wuv1:rpc:handler => 从 queue 中阻塞获取 call.
           call = callQueue.take(); // pop the queue; maybe blocked here
           startTimeNanos = Time.monotonicNowNanos();
           if (alignmentContext != null && call.isCallCoordinated() &&
@@ -2966,6 +2987,7 @@ public abstract class Server {
           if (remoteUser != null) {
             remoteUser.doAs(call);
           } else {
+            // wuv1:rpc:handler => handler 线程调用 call.run 方法
             call.run();
           }
         } catch (InterruptedException e) {
@@ -3081,6 +3103,7 @@ public abstract class Server {
     if (queueSizePerHandler != -1) {
       this.maxQueueSize = handlerCount * queueSizePerHandler;
     } else {
+      // wuv1:rpc:handler => 配置 handler 个数, ipc.server.handler.queue.size = 100 (默认)
       this.maxQueueSize = handlerCount * conf.getInt(
           CommonConfigurationKeys.IPC_SERVER_HANDLER_QUEUE_SIZE_KEY,
           CommonConfigurationKeys.IPC_SERVER_HANDLER_QUEUE_SIZE_DEFAULT);      
@@ -3091,6 +3114,7 @@ public abstract class Server {
     if (numReaders != -1) {
       this.readThreads = numReaders;
     } else {
+      // wuv1:rpc:reader => 配置 reader 线程数,ipc.server.read.threadpool.size=1(默认)
       this.readThreads = conf.getInt(
           CommonConfigurationKeys.IPC_SERVER_RPC_READ_THREADS_KEY,
           CommonConfigurationKeys.IPC_SERVER_RPC_READ_THREADS_DEFAULT);
@@ -3130,6 +3154,7 @@ public abstract class Server {
         CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_DEFAULT));
 
     // Create the responder here
+    // wuv1:rpc:responder => 在 rpc server 中初始化 responder
     responder = new Responder();
     
     if (secretManager != null || UserGroupInformation.isSecurityEnabled()) {
@@ -3231,6 +3256,7 @@ public abstract class Server {
     if (status == RpcStatusProto.FATAL) {
       call.connection.setShouldClose();
     }
+    // wuv1:rpc:handler => 构造 response header
     RpcResponseHeaderProto.Builder headerBuilder =
         RpcResponseHeaderProto.newBuilder();
     headerBuilder.setClientId(ByteString.copyFrom(call.clientId));
@@ -3277,6 +3303,7 @@ public abstract class Server {
       LOG.warn("Large response size " + response.length + " for call "
           + call.toString());
     }
+    // wuv1:rpc:handler => 设置 call 的 response
     call.setResponse(ByteBuffer.wrap(response));
   }
 
@@ -3402,6 +3429,7 @@ public abstract class Server {
       }
     }
 
+    // wuv1:rpc:handler => Server 会初始化一批 handler 用于处理进来的请求
     handlers = new Handler[handlerCount];
     
     for (int i = 0; i < handlerCount; i++) {

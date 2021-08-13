@@ -66,6 +66,7 @@ public class CallQueueManager<E extends Schedulable>
 
   // Atomic refs point to active callQueue
   // We have two so we can better control swapping
+  // wuv1:tips => 使用 Atomic 引用是为了 refresh config
   private final AtomicReference<BlockingQueue<E>> putRef;
   private final AtomicReference<BlockingQueue<E>> takeRef;
 
@@ -235,6 +236,9 @@ public class CallQueueManager<E extends Schedulable>
    */
   @Override
   public void put(E e) throws InterruptedException {
+    // wuv1:rpc:reader => 根据是否开启 backoff 有以下几种情况
+    //  1. 没开启 backoff, block put
+    //  2. 开启 backoff,  queue overflows, throws exception, not overflows, non-block add
     if (!isClientBackoffEnabled()) {
       putRef.get().put(e);
     } else if (shouldBackOff(e)) {
@@ -314,6 +318,7 @@ public class CallQueueManager<E extends Schedulable>
     E e = null;
 
     while (e == null) {
+      // wuv1:tips => 注意这里不是使用 poll() 一直阻塞获取. 因为 takeRef 的引用可能发生变化.
       e = takeRef.get().poll(1000L, TimeUnit.MILLISECONDS);
     }
 

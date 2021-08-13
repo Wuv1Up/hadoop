@@ -1090,6 +1090,7 @@ public class RPC {
     @Override
     public Writable call(RPC.RpcKind rpcKind, String protocol,
         Writable rpcRequest, long receiveTime) throws Exception {
+      // wuv1:rpc:handler => 根据 rpcKind 获取不同的 RpcInvoker, 然后调用 call
       return getServerRpcInvoker(rpcKind).call(this, protocol, rpcRequest,
           receiveTime);
     }
