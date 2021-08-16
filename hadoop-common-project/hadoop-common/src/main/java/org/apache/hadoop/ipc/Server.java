@@ -1533,17 +1533,20 @@ public abstract class Server {
     private void doRunLoop() {
       long lastPurgeTimeNanos = 0;   // last check for old calls.
 
+      // wuv1:rpc:responder -> responder 持续运行的逻辑
       while (running) {
         try {
           waitPending();     // If a channel is being registered, wait.
           writeSelector.select(
               TimeUnit.NANOSECONDS.toMillis(PURGE_INTERVAL_NANOS));
+          // wuv1:rpc:responder -> 找出需要写出数据的 channel
           Iterator<SelectionKey> iter = writeSelector.selectedKeys().iterator();
           while (iter.hasNext()) {
             SelectionKey key = iter.next();
             iter.remove();
             try {
               if (key.isWritable()) {
+                // wuv1:rpc:responder -> 处理获取的一个 channel
                 doAsyncWrite(key);
               }
             } catch (CancelledKeyException cke) {
@@ -1613,6 +1616,7 @@ public abstract class Server {
       }
 
       synchronized(call.connection.responseQueue) {
+        // wuv1:rpc:responder -> 处理 queue 中的一个 response 如果在 channel 中没有 pending 的 data, 设置 key interest
         if (processResponse(call.connection.responseQueue, false)) {
           try {
             key.interestOps(0);
@@ -1676,11 +1680,13 @@ public abstract class Server {
           //
           // Send as much data as we can in the non-blocking fashion
           //
+          // wuv1:rpc:responder -> 将 response data 尽可能发送到 connection channel 中
           int numBytes = channelWrite(channel, call.rpcResponse);
           if (numBytes < 0) {
             return true;
           }
           if (!call.rpcResponse.hasRemaining()) {
+            // wuv1:rpc:responder -> 一次发送就将 rpc 的 response 的数据写完
             //Clear out the response buffer so it can be collected
             call.rpcResponse = null;
             call.connection.decRpcCount();
@@ -1698,6 +1704,7 @@ public abstract class Server {
             // If we were unable to write the entire response out, then 
             // insert in Selector queue. 
             //
+            // wuv1:rpc:responder -> 一次处理没有将 response 写完, 将 RpcCall 再加到队列中
             call.connection.responseQueue.addFirst(call);
             
             if (inHandler) {
